@@ -43,16 +43,17 @@ interface G {
   glowMs: number;
   lastNow: number;
   raf: number;
+  bgTime: number;
 }
 
 const COIN_DATA = [
-  { type:'I', label:'G', name:'Gold',    color:'#ffd84d', delay:'0s'   },
-  { type:'O', label:'S', name:'Silver',  color:'#c8c8d8', delay:'.18s' },
-  { type:'T', label:'R', name:'Ruby',    color:'#ff5d5d', delay:'.36s' },
-  { type:'S', label:'E', name:'Emerald', color:'#6dff8b', delay:'.54s' },
-  { type:'Z', label:'P', name:'Plasma',  color:'#ff6bff', delay:'.72s' },
-  { type:'J', label:'D', name:'Diamond', color:'#6bddff', delay:'.90s' },
-  { type:'L', label:'N', name:'Nova',    color:'#ff9f3f', delay:'1.08s'},
+  { type:'I', label:'G', name:'Gold',    color:'#ffd84d', delay:'0s'    },
+  { type:'O', label:'S', name:'Silver',  color:'#c8c8d8', delay:'.18s'  },
+  { type:'T', label:'R', name:'Ruby',    color:'#ff5d5d', delay:'.36s'  },
+  { type:'S', label:'E', name:'Emerald', color:'#6dff8b', delay:'.54s'  },
+  { type:'Z', label:'P', name:'Plasma',  color:'#ff6bff', delay:'.72s'  },
+  { type:'J', label:'D', name:'Diamond', color:'#6bddff', delay:'.90s'  },
+  { type:'L', label:'N', name:'Nova',    color:'#ff9f3f', delay:'1.08s' },
 ];
 
 export default function App() {
@@ -62,13 +63,12 @@ export default function App() {
   const [muted,   setMuted]   = useState(false);
   const touch = useRef({ sx:0, sy:0, st:0, lastTap:0 });
 
-  // ── helpers ─────────────────────────────────────────────────────────────
   const themeColors = useCallback((): Record<string,string> => {
     if (!g.current) return COIN_COLORS;
     return (THEMES[g.current.theme]?.colors as Record<string,string>) ?? COIN_COLORS;
   }, []);
 
-  // ── canvas always mounted — resize once ─────────────────────────────────
+  // canvas resize observer
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -89,9 +89,10 @@ export default function App() {
     return () => ro.disconnect();
   }, []);
 
-  // ── menu demo loop (background animation when not playing) ───────────────
+  // menu background animation
   const menuRaf = useRef(0);
-  const demoRef = useRef<{board:(string|null)[][];pieces:{piece:Piece;ttl:number}[];t:number}>({
+  const menuBgTime = useRef(0);
+  const demoRef = useRef<{board:(string|null)[][];pieces:{piece:Piece;ttl:number;vy:number}[];t:number}>({
     board: createEmptyBoard(), pieces: [], t: 0,
   });
 
@@ -101,16 +102,21 @@ export default function App() {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     const w = canvas.clientWidth, h = canvas.clientHeight;
-    drawBackground(ctx, w, h);
+    const dt = 0.016;
+    menuBgTime.current += dt;
+    drawBackground(ctx, w, h, dt);
 
     const d = demoRef.current;
-    d.t += 0.016;
+    d.t += dt;
 
-    // occasionally spawn a falling piece
-    if (d.pieces.length < 3 && Math.random() < 0.02) {
+    if (d.pieces.length < 5 && Math.random() < 0.025) {
       const types = Object.keys(COIN_COLORS);
       const type  = types[Math.floor(Math.random()*types.length)];
-      d.pieces.push({ piece: { type: type as any, x: Math.floor(Math.random()*(COLS-3)), y:-2, rotation: Math.floor(Math.random()*4) }, ttl: 4 });
+      d.pieces.push({
+        piece: { type: type as any, x: Math.floor(Math.random()*(COLS-3)), y:-2, rotation: Math.floor(Math.random()*4) },
+        ttl: 5,
+        vy: 0.03 + Math.random() * 0.04,
+      });
     }
 
     const cs = Math.max(16, Math.floor(Math.min(w*0.045, h*0.035)));
@@ -118,23 +124,20 @@ export default function App() {
     const bw = cs*COLS, bh = cs*ROWS;
     const bx = cx - bw/2, by = cy - bh/2;
 
-    // dim board backdrop
-    ctx.save(); ctx.globalAlpha=0.28;
-    ctx.fillStyle='#1a1a22'; ctx.fillRect(bx, by, bw, bh);
+    ctx.save(); ctx.globalAlpha = 0.22;
+    ctx.fillStyle = '#0d0d18'; ctx.fillRect(bx, by, bw, bh);
     ctx.restore();
 
-    // falling demo coins
+    const tc = themeColors();
     d.pieces = d.pieces.filter(p => {
-      p.ttl -= 0.016;
-      p.piece.y += 0.04;
-      if (p.ttl <= 0 || p.piece.y*cs > bh) return false;
-      const tc = themeColors();
-      for (const cell of [{x:p.piece.x,y:Math.floor(p.piece.y)}]) {
-        if (cell.y >= 0 && cell.y < ROWS) {
-          ctx.save(); ctx.globalAlpha = Math.min(1, p.ttl)*0.6;
-          drawMiniPiece(ctx, p.piece.type, bx+cell.x*cs+cs/2, by+cell.y*cs+cs/2, cs, tc);
-          ctx.restore();
-        }
+      p.ttl -= dt;
+      p.piece.y += p.vy;
+      if (p.ttl <= 0 || p.piece.y * cs > bh + cs) return false;
+      const fy = Math.floor(p.piece.y);
+      if (fy >= 0 && fy < ROWS) {
+        ctx.save(); ctx.globalAlpha = Math.min(1, p.ttl * 0.5) * 0.75;
+        drawMiniPiece(ctx, p.piece.type, bx+p.piece.x*cs+cs/2, by+fy*cs+cs/2, cs*0.9, tc);
+        ctx.restore();
       }
       return true;
     });
@@ -142,7 +145,7 @@ export default function App() {
     menuRaf.current = requestAnimationFrame(menuLoop);
   }, [themeColors]);
 
-  // ── game loop ────────────────────────────────────────────────────────────
+  // lock piece
   const lockCurrent = useCallback((ref: G, setScr: typeof setScreen) => {
     const nb = lockPiece(ref.board, ref.current);
     const { board: cb, cleared, lines: rows } = clearLines(nb);
@@ -170,13 +173,14 @@ export default function App() {
         else if (cleared===3) msgs.push(['TRIPLE','#6dff8b',0]);
         else if (cleared===2) msgs.push(['DOUBLE','#6dff8b',0]);
         msgs.push([`+${pts.toLocaleString()}`,'#ffd84d',28]);
-        if (ref.combo>2)      msgs.push([`COMBO ×${ref.combo}`,'#ff6bff',56]);
-
-        msgs.forEach(([text,color,dy]) => ref.floats.push({ x:fx, y:by+9*cs-dy, text, color, vy:-.7, life:1.4, maxLife:1.4 }));
+        if (ref.combo>2) msgs.push([`COMBO ×${ref.combo}`,'#ff6bff',56]);
+        msgs.forEach(([text,color,dy]) =>
+          ref.floats.push({ x:fx, y:by+9*cs-dy, text, color, vy:-.8, life:1.5, maxLife:1.5 })
+        );
       }
       sound.lineClear(cleared);
       if (ref.combo>2) sound.combo(ref.combo);
-      ref.shakeMs = cleared>=4 ? 220 : 120;
+      ref.shakeMs = cleared>=4 ? 240 : 130;
 
       if (ref.score>=5000  && !ref.unlocked.includes('gold-rush'))  { ref.unlocked.push('gold-rush');  saveUnlocked(ref.unlocked); }
       if (ref.score>=15000 && !ref.unlocked.includes('midnight'))    { ref.unlocked.push('midnight');    saveUnlocked(ref.unlocked); }
@@ -186,10 +190,8 @@ export default function App() {
     }
 
     if (ref.score > ref.hiScore) { ref.hiScore = ref.score; saveHighScore(ref.score); }
-
     ref.dropMs = 0; ref.lockMs = 0;
 
-    // spawn next
     const nextType = ref.next[0]?.type || 'I';
     const np = spawnPiece(nextType as any);
     const { piece: bagPiece, newBag } = getNextPiece(ref.bag as any);
@@ -212,7 +214,7 @@ export default function App() {
     }
     ref.current = np;
     ref.canHold = true;
-    ref.glowMs  = 180;
+    ref.glowMs  = 200;
   }, []);
 
   const gameLoop = useCallback((now: number, ref: G, setScr: typeof setScreen) => {
@@ -224,6 +226,7 @@ export default function App() {
 
     const dt  = Math.min((now - ref.lastNow) / 1000, 0.05);
     ref.lastNow = now;
+    ref.bgTime += dt;
     const dtMs  = dt * 1000;
 
     // gravity
@@ -236,22 +239,25 @@ export default function App() {
         if (ref.softDrop) ref.score += 1;
       } else {
         ref.lockMs += interval;
-        if (ref.lockMs >= 500 || ref.softDrop) { lockCurrent(ref, setScr); ref.raf = requestAnimationFrame(n => gameLoop(n, ref, setScr)); return; }
+        if (ref.lockMs >= 500 || ref.softDrop) {
+          lockCurrent(ref, setScr);
+          ref.raf = requestAnimationFrame(n => gameLoop(n, ref, setScr));
+          return;
+        }
       }
     }
     if (ref.shakeMs > 0) ref.shakeMs -= dtMs;
     if (ref.glowMs  > 0) ref.glowMs  -= dtMs;
 
-    // render
     const w = canvas.clientWidth, h = canvas.clientHeight;
     const cs = getCellSize(canvas);
     const { bx:baseBx, by } = getBoardOffset(canvas, cs);
     const shk = ref.shakeMs > 0;
-    const bx  = baseBx + (shk ? (Math.random()-.5)*5 : 0);
-    const sy  =           shk ? (Math.random()-.5)*3  : 0;
+    const bx  = baseBx + (shk ? (Math.random()-.5)*6 : 0);
+    const sy  =           shk ? (Math.random()-.5)*4  : 0;
     const tc  = themeColors();
 
-    drawBackground(ctx, w, h);
+    drawBackground(ctx, w, h, dt);
     drawBoard(ctx, ref.board, bx, by+sy, cs, tc, [], 0);
     drawGhost(ctx, ref.board, ref.current, bx, by+sy, cs);
     drawPiece(ctx, ref.current, bx, by+sy, cs, tc, ref.glowMs > 0);
@@ -262,7 +268,7 @@ export default function App() {
     ref.raf = requestAnimationFrame(n => gameLoop(n, ref, setScr));
   }, [themeColors, lockCurrent]);
 
-  // ── screen transitions ───────────────────────────────────────────────────
+  // screen transitions
   useEffect(() => {
     if (screen === 'menu' || screen === 'stats' || screen === 'themes' || screen === 'howto' || screen === 'about') {
       cancelAnimationFrame(menuRaf.current);
@@ -273,7 +279,7 @@ export default function App() {
     return undefined;
   }, [screen, menuLoop]);
 
-  // ── start game ───────────────────────────────────────────────────────────
+  // start game
   const startGame = useCallback(() => {
     const bag0: string[] = [];
     const { piece, newBag } = getNextPiece(bag0 as any);
@@ -295,6 +301,7 @@ export default function App() {
       shakeMs: 0, glowMs: 0,
       lastNow: performance.now(),
       raf: 0,
+      bgTime: 0,
     };
     g.current = ref;
     setScreen('playing');
@@ -318,7 +325,21 @@ export default function App() {
     }
   }, []);
 
-  // ── keyboard ─────────────────────────────────────────────────────────────
+  const resumeGame = useCallback(() => {
+    const ref = g.current; if (!ref) return;
+    ref.active = true;
+    ref.lastNow = performance.now();
+    setScreen('playing');
+    ref.raf = requestAnimationFrame(now => gameLoop(now, ref, setScreen));
+  }, [gameLoop]);
+
+  const toggleMute = useCallback(() => {
+    const next = !muted;
+    setMuted(next);
+    sound.setMuted(next);
+  }, [muted]);
+
+  // keyboard
   useEffect(() => {
     if (screen !== 'playing') return;
     function dn(e: KeyboardEvent) {
@@ -326,7 +347,7 @@ export default function App() {
       if (e.code === 'ArrowLeft'  || e.code === 'KeyA') { e.preventDefault(); if (isValidPosition(ref.board,ref.current,-1,0)) { ref.current={...ref.current,x:ref.current.x-1}; ref.lockMs=0; sound.move(); } }
       if (e.code === 'ArrowRight' || e.code === 'KeyD') { e.preventDefault(); if (isValidPosition(ref.board,ref.current,1,0))  { ref.current={...ref.current,x:ref.current.x+1}; ref.lockMs=0; sound.move(); } }
       if (e.code === 'ArrowDown'  || e.code === 'KeyS') { e.preventDefault(); ref.softDrop=true; }
-      if (e.code === 'ArrowUp' || e.code === 'KeyX' || e.code === 'KeyW') { e.preventDefault(); const r=tryRotate(ref.board,ref.current,1);  if(r){ref.current=r;ref.lockMs=0;sound.rotate();} }
+      if (e.code === 'ArrowUp' || e.code === 'KeyX' || e.code === 'KeyW') { e.preventDefault(); const r=tryRotate(ref.board,ref.current,1); if(r){ref.current=r;ref.lockMs=0;sound.rotate();} }
       if (e.code === 'KeyZ') { e.preventDefault(); const r=tryRotate(ref.board,ref.current,-1); if(r){ref.current=r;ref.lockMs=0;sound.rotate();} }
       if (e.code === 'Space') {
         e.preventDefault();
@@ -346,7 +367,7 @@ export default function App() {
     return () => { window.removeEventListener('keydown', dn); window.removeEventListener('keyup', up); };
   }, [screen, doHold, lockCurrent]);
 
-  // ── touch ────────────────────────────────────────────────────────────────
+  // touch
   function onTS(e: React.TouchEvent) {
     const t = e.touches[0];
     touch.current = { sx:t.clientX, sy:t.clientY, st:Date.now(), lastTap:touch.current.lastTap };
@@ -357,128 +378,91 @@ export default function App() {
     const t = e.changedTouches[0];
     const dx = t.clientX-touch.current.sx, dy = t.clientY-touch.current.sy;
     const elapsed = Date.now()-touch.current.st;
-    // swipe down = hard drop
     if (dy>55 && Math.abs(dy)>Math.abs(dx)*1.4) {
       const d=getGhostY(ref.board,ref.current)-ref.current.y;
       ref.score+=d*2; ref.current={...ref.current,y:ref.current.y+d};
       sound.hardDrop(); lockCurrent(ref, setScreen); return;
     }
-    // swipe left/right
     if (Math.abs(dx)>28 && Math.abs(dx)>Math.abs(dy)*1.4) {
       const dir=dx>0?1:-1, steps=Math.min(5,Math.floor(Math.abs(dx)/28));
       for (let i=0;i<steps;i++) if(isValidPosition(ref.board,{...ref.current,x:ref.current.x+dir})){ ref.current={...ref.current,x:ref.current.x+dir}; ref.lockMs=0; sound.move(); }
       return;
     }
-    // double tap = rotate
     const now = Date.now();
     if (now-touch.current.lastTap<280 && elapsed<200) {
       const r=tryRotate(ref.board,ref.current,1); if(r){ref.current=r;ref.lockMs=0;sound.rotate();}
       touch.current.lastTap=0; return;
     }
     touch.current.lastTap=now;
-    // single tap sides = move
     if (elapsed<200 && Math.abs(dx)<18 && Math.abs(dy)<18) {
       const canvas=canvasRef.current; if(!canvas) return;
       const rect=canvas.getBoundingClientRect();
       const dir=(t.clientX-rect.left)<rect.width/2?-1:1;
-      if(isValidPosition(ref.board,ref.current,dir,0)){ref.current={...ref.current,x:ref.current.x+dir};ref.lockMs=0;sound.move();}
+      if(isValidPosition(ref.board,{...ref.current,x:ref.current.x+dir})){ ref.current={...ref.current,x:ref.current.x+dir}; ref.lockMs=0; sound.move(); }
     }
   }
 
-  const toggleMute = useCallback(() => {
-    const m = !sound.isMuted(); sound.setMuted(m); setMuted(m);
-  }, []);
-
-  const resumeGame = useCallback(() => {
-    const ref = g.current; if (!ref) return;
-    ref.active = true;
-    ref.lastNow = performance.now();
-    ref.raf = requestAnimationFrame(now => gameLoop(now, ref, setScreen));
-    setScreen('playing');
-  }, [gameLoop]);
-
-  // ── render ───────────────────────────────────────────────────────────────
-  const isGameScreen = screen === 'playing' || screen === 'paused' || screen === 'gameover';
-  const hiScore = g.current?.hiScore ?? loadHighScore();
-
   return (
     <div className="root-wrap" onTouchStart={onTS} onTouchEnd={onTE}>
-      {/* canvas ALWAYS mounted */}
       <canvas ref={canvasRef} className="game-canvas" />
 
-      {/* ── MENU ─── */}
-      {!isGameScreen && (
+      {/* ── MENU & sub-screens ── */}
+      {(screen === 'menu' || screen === 'stats' || screen === 'themes' || screen === 'howto' || screen === 'about') && (
         <div className="overlay">
           <div className="menu-bg" />
           <div className="menu-grid" />
           <div className="menu-scanlines" />
           <div className="menu-vignette" />
 
-          {/* floating background coins */}
-          {Array.from({length:8},(_,i) => (
-            <div key={i} style={{
-              position:'absolute', left:`${8+i*12}%`, bottom:'-24px',
-              width:14+i%3*4, height:14+i%3*4, borderRadius:'50%',
-              background:COIN_DATA[i%7].color,
-              opacity:0.06+(i%3)*0.04,
-              animation:`floatUp ${4.5+i*.6}s ${i*.55}s linear infinite`,
-              boxShadow:`0 0 8px ${COIN_DATA[i%7].color}`,
-              pointerEvents:'none',
-            }}/>
-          ))}
-
           {screen === 'menu' && (
             <div className="menu-body">
               {/* Logo */}
               <div className="logo-lockup">
-                <span className="logo-main"><span className="logo-coin">COIN</span><span className="logo-tris">TRIS</span></span>
-                <div className="logo-sub">✦ &nbsp; CRYPTO ARCADE PUZZLE &nbsp; ✦</div>
+                <span className="logo-main">
+                  <span className="logo-coin">COIN</span><span className="logo-tris">TRIS</span>
+                </span>
+                <div className="logo-sub">Crypto Arcade Puzzle</div>
               </div>
 
               <div className="menu-divider" />
 
               {/* Coin showcase */}
               <div className="coin-showcase">
-                {COIN_DATA.map((c,i) => (
+                {COIN_DATA.map(c => (
                   <div key={c.type} className="coin-item">
-                    <div className="coin-ball" style={{
-                      background:`radial-gradient(circle at 35% 30%, ${lightenColor(c.color,.42)}, ${c.color} 48%, ${darkenColor(c.color,.32)})`,
-                      boxShadow:`0 3px 12px rgba(0,0,0,.5), 0 0 18px ${c.color}44, inset 0 1px 2px rgba(255,255,255,.26)`,
-                      color:'rgba(0,0,0,0.62)',
-                      animationDelay:c.delay,
-                      animationDuration:`${2.2+i*0.18}s`,
-                    }}>
-                      {c.label}
+                    <div
+                      className="coin-ball"
+                      style={{
+                        background: `radial-gradient(circle at 35% 30%, ${lightenColor(c.color,0.45)}, ${c.color} 45%, ${darkenColor(c.color,0.3)} 100%)`,
+                        animationDelay: c.delay,
+                        boxShadow: `0 3px 14px rgba(0,0,0,0.55), 0 0 12px ${c.color}44, inset 0 1px 3px rgba(255,255,255,0.28)`,
+                      }}
+                    >
+                      <span className="coin-label">{c.label}</span>
                     </div>
-                    <div className="coin-name">{c.name}</div>
+                    <span className="coin-name">{c.name}</span>
                   </div>
                 ))}
               </div>
 
               {/* Hi-score */}
-              {hiScore > 0 && (
-                <div className="hiscore-strip">
-                  <span className="hs-label">BEST SCORE</span>
-                  <span className="hs-value">{hiScore.toLocaleString()}</span>
-                </div>
-              )}
+              <div className="hiscore-strip">
+                <span className="hs-label">Best Score</span>
+                <span className="hs-value">{loadHighScore().toLocaleString()}</span>
+              </div>
 
-              {/* Buttons */}
+              {/* Play button */}
               <button className="btn-play" onClick={startGame}>▶ &nbsp; PLAY NOW</button>
 
-              <div className="btn-grid" style={{marginBottom:8}}>
+              {/* Secondary buttons */}
+              <div className="btn-grid">
                 <button className="btn-sec" onClick={() => setScreen('howto')}>HOW TO PLAY</button>
                 <button className="btn-sec" onClick={() => setScreen('themes')}>THEMES</button>
               </div>
-              <div className="btn-grid">
-                <button className="btn-sec" onClick={() => setScreen('stats')}>STATISTICS</button>
+              <div className="btn-grid-3">
+                <button className="btn-sec" onClick={() => setScreen('stats')}>STATS</button>
+                <button className="btn-sec" onClick={toggleMute}>{muted ? '🔇 MUTED' : '🔊 SOUND'}</button>
                 <button className="btn-sec" onClick={() => setScreen('about')}>ABOUT</button>
-              </div>
-
-              <div style={{marginTop:22,textAlign:'center',color:'#3a3a50',fontSize:10,lineHeight:2,letterSpacing:'0.05em'}}>
-                <div><span style={{color:'#5a5a72'}}>← →</span> MOVE &nbsp;·&nbsp; <span style={{color:'#5a5a72'}}>↑ / X</span> ROTATE &nbsp;·&nbsp; <span style={{color:'#5a5a72'}}>Z</span> CCW</div>
-                <div><span style={{color:'#5a5a72'}}>↓</span> SOFT DROP &nbsp;·&nbsp; <span style={{color:'#5a5a72'}}>SPACE</span> HARD DROP</div>
-                <div><span style={{color:'#5a5a72'}}>C / SHIFT</span> HOLD &nbsp;·&nbsp; <span style={{color:'#5a5a72'}}>P</span> PAUSE</div>
               </div>
             </div>
           )}
@@ -488,80 +472,82 @@ export default function App() {
             <div className="modal-wrap">
               <div className="modal-card">
                 <div className="modal-title">HOW TO PLAY</div>
-                <div className="modal-subtitle">master the coins</div>
+                <div className="modal-subtitle">controls & scoring</div>
 
                 <div className="htp-section">
-                  <div className="htp-heading">⌨ CONTROLS</div>
+                  <div className="htp-heading">Keyboard</div>
                   <div className="htp-grid">
                     {[
-                      ['← / →','Move left / right'],
-                      ['↑ / X','Rotate clockwise'],
-                      ['Z','Rotate counter-CW'],
-                      ['↓','Soft drop'],
-                      ['SPACE','Hard drop'],
-                      ['C / SHIFT','Hold piece'],
-                      ['P / ESC','Pause'],
-                      ['Double-tap','Rotate (mobile)'],
-                    ].map(([k,d]) => (
-                      <div key={k} className="htp-key">
-                        <span className="kbd">{k}</span>
-                        <span className="htp-key-desc">{d}</span>
+                      ['← →  /  A D', 'Move'],
+                      ['↑ / X / W', 'Rotate CW'],
+                      ['Z', 'Rotate CCW'],
+                      ['↓ / S', 'Soft Drop'],
+                      ['Space', 'Hard Drop'],
+                      ['C / Shift', 'Hold Piece'],
+                      ['P / Esc', 'Pause'],
+                    ].map(([key, desc]) => (
+                      <div key={key} className="htp-key">
+                        <span className="kbd">{key}</span>
+                        <span className="htp-key-desc">{desc}</span>
                       </div>
                     ))}
                   </div>
                 </div>
 
                 <div className="htp-section">
-                  <div className="htp-heading">🪙 THE 7 COINS</div>
+                  <div className="htp-heading">Mobile Touch</div>
+                  <div className="htp-grid">
+                    {[
+                      ['Swipe ←→', 'Move'],
+                      ['Double Tap', 'Rotate'],
+                      ['Swipe ↓', 'Hard Drop'],
+                      ['Tap side', 'Move'],
+                    ].map(([key, desc]) => (
+                      <div key={key} className="htp-key">
+                        <span className="kbd">{key}</span>
+                        <span className="htp-key-desc">{desc}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="htp-section">
+                  <div className="htp-heading">Coin Pieces</div>
                   <div className="htp-coin-grid">
                     {COIN_DATA.map(c => (
                       <div key={c.type} className="htp-coin">
-                        <div className="htp-coin-dot" style={{
-                          background:`radial-gradient(circle at 35% 30%, ${lightenColor(c.color,.4)}, ${c.color} 48%, ${darkenColor(c.color,.3)})`,
-                          boxShadow:`0 2px 6px rgba(0,0,0,.35), 0 0 10px ${c.color}55`,
-                          color:'rgba(0,0,0,0.65)',
-                        }}>{c.label}</div>
-                        <div>
-                          <div style={{fontSize:11,fontWeight:700,color:'#d0d0e0'}}>{c.name}</div>
-                          <div className="htp-coin-name">{c.type}-Piece</div>
+                        <div
+                          className="htp-coin-dot"
+                          style={{
+                            background: `radial-gradient(circle at 35% 30%, ${lightenColor(c.color,0.4)}, ${c.color} 50%, ${darkenColor(c.color,0.25)})`,
+                            boxShadow: `0 2px 8px rgba(0,0,0,0.4), inset 0 1px 2px rgba(255,255,255,0.25), 0 0 8px ${c.color}44`,
+                          }}
+                        >
+                          {c.label}
                         </div>
+                        <span className="htp-coin-name">{c.name}</span>
                       </div>
                     ))}
                   </div>
                 </div>
 
                 <div className="htp-section">
-                  <div className="htp-heading">🏆 SCORING</div>
+                  <div className="htp-heading">Scoring</div>
                   <table className="score-table">
                     <tbody>
                       {[
-                        ['1 line cleared','100 × level'],
-                        ['2 lines (Double)','300 × level'],
-                        ['3 lines (Triple)','500 × level'],
-                        ['4 lines (COINTRIS!)','800 × level'],
-                        ['Combo bonus','×50 per chain'],
-                        ['Back-to-back x4','×1.5 multiplier'],
-                        ['Perfect clear','+2000 × level'],
-                        ['Hard drop','2 pts per cell'],
-                      ].map(([a,b]) => (
-                        <tr key={a}><td>{a}</td><td>{b}</td></tr>
+                        ['1 Line','100 × Level'],
+                        ['2 Lines (Double)','300 × Level'],
+                        ['3 Lines (Triple)','500 × Level'],
+                        ['4 Lines (COINTRIS!)','800 × Level'],
+                        ['Soft Drop','1 pt / cell'],
+                        ['Hard Drop','2 pts / cell'],
+                        ['Combo Bonus','50 pts × combo'],
+                      ].map(([k,v]) => (
+                        <tr key={k}><td>{k}</td><td>{v}</td></tr>
                       ))}
                     </tbody>
                   </table>
-                </div>
-
-                <div className="htp-section" style={{marginBottom:0}}>
-                  <div className="htp-heading">💡 TIPS</div>
-                  {[
-                    'Use the ghost piece (dashed outline) to aim before dropping.',
-                    'Hold a piece with C or SHIFT — save it for the perfect moment.',
-                    'Chain combos by clearing lines back-to-back for huge bonus points.',
-                    'Unlock 3 extra color themes by reaching 5k, 15k, and 30k points.',
-                  ].map((tip,i) => (
-                    <div key={i} style={{fontSize:11,color:'#707080',marginBottom:7,paddingLeft:10,borderLeft:'2px solid rgba(109,255,139,0.25)',lineHeight:1.55}}>
-                      {tip}
-                    </div>
-                  ))}
                 </div>
 
                 <button className="btn-back" onClick={() => setScreen('menu')}>← BACK TO MENU</button>
@@ -575,7 +561,8 @@ export default function App() {
               <div className="modal-card">
                 <div className="about-logo">
                   <div className="about-logo-text">
-                    <span style={{color:'#6dff8b'}}>COIN</span><span style={{color:'#ffd84d'}}>TRIS</span>
+                    <span style={{color:'#6dff8b',textShadow:'0 0 16px rgba(109,255,139,0.55)'}}>COIN</span>
+                    <span style={{color:'#ffd84d',textShadow:'0 0 16px rgba(255,216,77,0.55)'}}>TRIS</span>
                   </div>
                   <div className="about-version">Version 1.0 &nbsp;·&nbsp; 2025</div>
                 </div>
@@ -583,7 +570,7 @@ export default function App() {
                   A retro-inspired arcade puzzle game where classic Tetris gameplay meets crypto culture. Stack 7 unique coin tetrominoes — Gold, Silver, Ruby, Emerald, Plasma, Diamond, and Nova — to clear lines and build massive combos.
                 </div>
                 <div className="about-tags">
-                  {['React 18','Vite 7','TypeScript','Canvas 2D','Web Audio API','SRS Rotation'].map(t => (
+                  {['React 18','Vite 7','TypeScript','Canvas 2D','Web Audio API','SRS Rotation','Orbitron Font'].map(t => (
                     <span key={t} className="about-tag">{t}</span>
                   ))}
                 </div>
@@ -598,11 +585,11 @@ export default function App() {
                   ].map(([k,v]) => (
                     <div key={k} className="stat-row" style={{marginBottom:6}}>
                       <span className="stat-label">{k}</span>
-                      <span className="stat-val" style={{fontSize:11,color:'#a0a0b8',textAlign:'right',maxWidth:'55%'}}>{v}</span>
+                      <span className="stat-val" style={{fontSize:10,color:'#808096',textAlign:'right',maxWidth:'55%',fontFamily:'Space Grotesk,monospace'}}>{v}</span>
                     </div>
                   ))}
                 </div>
-                <div style={{textAlign:'center',fontSize:10,color:'#3a3a52',letterSpacing:'0.08em'}}>
+                <div style={{textAlign:'center',fontSize:10,color:'#2a2a3a',letterSpacing:'0.1em',fontFamily:'Space Grotesk,monospace'}}>
                   Built with ♥ by Synterlab
                 </div>
                 <button className="btn-back" onClick={() => setScreen('menu')}>← BACK TO MENU</button>
@@ -623,7 +610,7 @@ export default function App() {
                     ['Lines Cleared',   s.linesCleared.toLocaleString(),      '#6dff8b'],
                     ['Highest Level',   s.highestLevel.toString(),            '#6dff8b'],
                     ['Best Score',      s.bestScore.toLocaleString(),         '#ffd84d'],
-                    ['Best Combo',      `×${s.bestCombo}`,                   '#ff6bff'],
+                    ['Best Combo',      `×${s.bestCombo}`,                    '#ff6bff'],
                     ['Total Play Time', fmtTime(s.totalPlayTime),             '#f0f0f0'],
                   ].map(([label, val, col]) => (
                     <div key={label} className="stat-row">
@@ -660,7 +647,12 @@ export default function App() {
                           setScreen('menu');
                         }}>
                         <div className="theme-dots">
-                          {dots.map((c,i) => <div key={i} className="theme-dot" style={{background:isLocked?'#3a3a4a':c, boxShadow:isLocked?'none':`0 0 5px ${c}88`}} />)}
+                          {dots.map((c,i) => (
+                            <div key={i} className="theme-dot" style={{
+                              background: isLocked ? '#2a2a3a' : c,
+                              boxShadow: isLocked ? 'none' : `0 0 7px ${c}99, 0 2px 4px rgba(0,0,0,0.4)`,
+                            }} />
+                          ))}
                         </div>
                         <div className="theme-info">
                           <div className="theme-name">{theme.name}</div>
@@ -691,21 +683,23 @@ export default function App() {
       {/* ── GAME OVER ── */}
       {screen === 'gameover' && g.current && (
         <div className="gameover-overlay">
-          {/* floating coins */}
-          {Array.from({length:9},(_,i) => (
+          {/* Floating coins */}
+          {Array.from({length:10},(_,i) => (
             <div key={i} style={{
-              position:'absolute', left:`${5+i*11}%`, bottom:'-10px',
-              width:12+(i%3)*5, height:12+(i%3)*5, borderRadius:'50%',
-              background:COIN_DATA[i%7].color, opacity:.45,
-              animation:`floatUp ${2.6+i*.38}s ${i*.28}s linear infinite`,
-              boxShadow:`0 0 8px ${COIN_DATA[i%7].color}`, pointerEvents:'none',
+              position:'absolute', left:`${3+i*10}%`, bottom:'-14px',
+              width: 10+(i%4)*6, height: 10+(i%4)*6, borderRadius:'50%',
+              background: `radial-gradient(circle at 35% 30%, ${lightenColor(COIN_DATA[i%7].color, 0.4)}, ${COIN_DATA[i%7].color})`,
+              opacity: .4,
+              animation:`floatUp ${2.4+i*.35}s ${i*.22}s linear infinite`,
+              boxShadow:`0 0 10px ${COIN_DATA[i%7].color}88`,
+              pointerEvents:'none',
             }}/>
           ))}
-          <div style={{position:'relative',zIndex:2,width:'100%',maxWidth:320}}>
+          <div style={{position:'relative',zIndex:2,width:'100%',maxWidth:340}}>
             <div className="gameover-title">GAME OVER</div>
             <div className="gameover-sub">✦ FINAL RESULTS ✦</div>
             <div className="gameover-score-card">
-              <div className="gameover-score-label">SCORE</div>
+              <div className="gameover-score-label">FINAL SCORE</div>
               <div className="gameover-score-val">{g.current.score.toLocaleString()}</div>
               {g.current.score >= g.current.hiScore && g.current.score > 0 && (
                 <div className="gameover-new-best">✦ NEW BEST SCORE ✦</div>
@@ -715,8 +709,8 @@ export default function App() {
               {[
                 {label:'LINES',    val:String(g.current.lines),              color:'#6dff8b'},
                 {label:'LEVEL',    val:String(g.current.level+1),            color:'#6dff8b'},
-                {label:'COMBO',    val:`×${g.current.combo}`,               color:'#ff6bff'},
-                {label:'HIGH SCORE',val:g.current.hiScore.toLocaleString(),  color:'#ffd84d'},
+                {label:'COMBO',    val:`×${g.current.combo}`,                color:'#ff6bff'},
+                {label:'HI SCORE', val:g.current.hiScore.toLocaleString(),   color:'#ffd84d'},
               ].map(({label,val,color}) => (
                 <div key={label} className="gameover-cell">
                   <div className="gameover-cell-label">{label}</div>
@@ -726,13 +720,13 @@ export default function App() {
             </div>
             <div className="gameover-btns">
               <button className="btn-play" onClick={startGame}>▶ &nbsp; PLAY AGAIN</button>
-              <button className="btn-sec" style={{width:'100%',padding:'13px 0'}} onClick={() => setScreen('menu')}>← MENU</button>
+              <button className="btn-sec" style={{width:'100%',padding:'14px 0'}} onClick={() => setScreen('menu')}>← MENU</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ── TOUCH controls (playing only) ── */}
+      {/* ── TOUCH controls ── */}
       {screen === 'playing' && (
         <div className="touch-panel">
           <div className="touch-row">
@@ -750,7 +744,7 @@ export default function App() {
         </div>
       )}
 
-      {/* ── HUD buttons ── */}
+      {/* ── HUD ── */}
       <div className="hud-row">
         <button className="hud-btn" onClick={toggleMute}>{muted?'🔇':'🔊'}</button>
         {screen === 'playing' && (
@@ -764,7 +758,7 @@ export default function App() {
   );
 }
 
-// ── Colour helpers (UI only) ─────────────────────────────────────────────────
+// helpers
 function lightenColor(hex: string, t: number): string {
   const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);
   return `rgb(${Math.min(255,r+(255-r)*t)|0},${Math.min(255,g+(255-g)*t)|0},${Math.min(255,b+(255-b)*t)|0})`;
