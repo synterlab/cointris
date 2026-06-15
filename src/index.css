@@ -384,3 +384,118 @@ body {
 ::-webkit-scrollbar       { width: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: #2e2c40; }
+
+/* ── Login modal additions ────────────────────────────────────────────────── */
+.btn-login {
+  width: 100%;
+  padding: 11px 0;
+  background: #13111f;
+  border: 1px solid #2e2c40;
+  border-top-color: #4a4868; border-left-color: #4a4868;
+  color: #4a4868;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 7px; letter-spacing: 0.1em;
+  cursor: pointer; transition: border-color .15s, color .15s;
+}
+.btn-login:hover { border-color: #ffd84d; color: #8a7820; }
+.btn-login:active { transform: translate(1px,1px); }
+
+.user-chip {
+  display: flex; align-items: center; gap: 8px;
+  background: #131120;
+  border: 1px solid #2e2c40;
+  border-top-color: #ffd84d44; border-left-color: #ffd84d44;
+  padding: 8px 12px; width: 100%;
+}
+.user-chip-icon { color: #ffd84d; font-size: 12px; }
+.user-chip-name {
+  flex: 1;
+  font-family: 'Press Start 2P', monospace; font-size: 9px;
+  color: #ffd84d; letter-spacing: 0.08em;
+}
+.user-logout-btn {
+  background: transparent;
+  border: 1px solid #2e2c40;
+  color: #2e2c3a;
+  font-family: 'Press Start 2P', monospace; font-size: 6px; letter-spacing: 0.08em;
+  padding: 4px 7px; cursor: pointer; transition: border-color .15s, color .15s;
+}
+.user-logout-btn:hover { border-color: #e83048; color: #8a1828; }
+
+.login-section { display: flex; flex-direction: column; gap: 8px; }
+.login-label {
+  font-family: 'Press Start 2P', monospace; font-size: 7px;
+  color: #2a2848; letter-spacing: 0.12em;
+}
+.login-input {
+  background: #0e0c1a;
+  border: 1px solid #2e2c40; border-top-color: #3e3c58; border-left-color: #3e3c58;
+  color: #e8e6f8;
+  font-family: 'Press Start 2P', monospace; font-size: 11px; letter-spacing: 0.05em;
+  padding: 12px 10px; width: 100%;
+  outline: none; transition: border-color .15s;
+}
+.login-input::placeholder { color: #2a2848; }
+.login-input:focus { border-color: #6dff8b; }
+.login-error {
+  font-family: 'Press Start 2P', monospace; font-size: 7px;
+  color: #e83048; letter-spacing: 0.08em;
+}
+.profile-list { display: flex; flex-direction: column; gap: 5px; }
+.profile-btn {
+  background: #13111f; border: 1px solid #2e2c40;
+  color: #5a5878; padding: 10px 12px; text-align: left;
+  font-family: 'Press Start 2P', monospace; font-size: 8px; letter-spacing: 0.08em;
+  cursor: pointer; transition: border-color .15s, color .15s, background .15s;
+  display: flex; align-items: center; gap: 8px;
+}
+.profile-btn:hover { border-color: #ffd84d; color: #ffd84d; background: #1a1a10; }
+.profile-star { color: #ffd84d; font-size: 10px; }
+.login-note {
+  font-family: 'Space Mono', monospace; font-size: 9px;
+  color: #1e1c2e; text-align: center; line-height: 1.6;
+}
+
+/* ── Orynth badge ─────────────────────────────────────────────────────────── */
+.orynth-badge-wrap {
+  display: flex; justify-content: center; align-items: center;
+  width: 100%; padding: 4px 0;
+}
+.orynth-badge-link {
+  display: inline-block; line-height: 0;
+  opacity: 0.85; transition: opacity .18s;
+}
+.orynth-badge-link:hover { opacity: 1; }
+.orynth-badge-img {
+  display: block;
+  max-width: min(220px, 80vw); height: auto;
+  filter: none;
+}
+
+/* ── Founder X link ───────────────────────────────────────────────────────── */
+.logo-founder {
+  margin-bottom: 6px;
+  display: flex; justify-content: center;
+}
+.founder-link {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-family: 'Space Mono', monospace; font-size: 9px;
+  color: #2a2848; letter-spacing: 0.08em;
+  text-decoration: none; transition: color .15s;
+}
+.founder-link:hover { color: #7a7898; }
+.founder-x { font-size: 11px; color: #3a3858; }
+
+/* ── Stats user label ─────────────────────────────────────────────────────── */
+.stats-user {
+  font-family: 'Press Start 2P', monospace; font-size: 9px;
+  color: #ffd84d; letter-spacing: 0.1em; text-align: center;
+  padding: 6px 0; border-bottom: 1px solid #1e1c2e;
+}
+
+/* ── About additions ──────────────────────────────────────────────────────── */
+.about-meta { display: flex; flex-direction: column; gap: 8px; }
+.about-row  { display: flex; justify-content: space-between; align-items: center; padding: 7px 0; border-bottom: 1px solid #1a1828; }
+.about-lbl  { font-family: 'Press Start 2P', monospace; font-size: 6px; color: #2a2848; letter-spacing: 0.1em; }
+.about-link { font-family: 'Space Mono', monospace; font-size: 9px; color: #4a4868; text-decoration: none; transition: color .15s; }
+.about-link:hover { color: #6dff8b; }
