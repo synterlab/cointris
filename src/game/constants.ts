@@ -114,7 +114,7 @@ export const TETROMINOES: Record<string, number[][][]> = {
 };
 
 // SRS Wall kick offsets for J, L, S, T, Z: [from rotation] -> list of [dx,dy] tests
-export const WALL_KICKS: Record<string, [number,number][][]> = {
+export const WALL_KICKS: Record<string, number[][]> = {
   '0->1': [[0,0],[-1,0],[-1,1],[0,-2],[-1,-2]],
   '1->0': [[0,0],[1,0],[1,-1],[0,2],[1,2]],
   '1->2': [[0,0],[1,0],[1,-1],[0,2],[1,2]],
@@ -126,7 +126,7 @@ export const WALL_KICKS: Record<string, [number,number][][]> = {
 };
 
 // I-piece wall kicks
-export const WALL_KICKS_I: Record<string, [number,number][][]> = {
+export const WALL_KICKS_I: Record<string, number[][]> = {
   '0->1': [[0,0],[-2,0],[1,0],[-2,-1],[1,2]],
   '1->0': [[0,0],[2,0],[-1,0],[2,1],[-1,-2]],
   '1->2': [[0,0],[-1,0],[2,0],[-1,2],[2,-1]],
